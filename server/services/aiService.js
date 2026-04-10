@@ -1,21 +1,6 @@
 const OpenAI = require("openai");
 
-const useMock = process.env.USE_MOCK === "true";
-const apiKey = process.env.HF_API_KEY;
-
-if (!useMock && !apiKey) {
-  throw new Error("HF_API_KEY is missing in .env");
-}
-
-const client = new OpenAI({
-  baseURL: "https://router.huggingface.co/v1",
-  apiKey,
-});
-
-// choose one model from HF supported models page
-const MODEL_NAME = "meta-llama/Llama-3.1-8B-Instruct";
-// alt: const MODEL_NAME = "Qwen/Qwen2.5-7B-Instruct";
-
+// ✅ Normalize history safely
 const normalizeHistory = (history = []) => {
   if (!Array.isArray(history)) return [];
 
@@ -36,9 +21,25 @@ const getAIResponse = async (message, history = []) => {
       return "Please send a message so I can help you.";
     }
 
+    const useMock = process.env.USE_MOCK === "true";
+    const apiKey = process.env.HF_API_KEY;
+
+    // ✅ MOCK MODE (NO API NEEDED)
     if (useMock) {
       return `Mock AI Reply: You said -> "${safeMessage}"`;
     }
+
+    // ✅ If API key missing → don't crash
+    if (!apiKey) {
+      console.warn("HF_API_KEY missing → fallback to mock");
+      return `Mock AI Reply: You said -> "${safeMessage}"`;
+    }
+
+    // ✅ Initialize client safely
+    const client = new OpenAI({
+      baseURL: "https://router.huggingface.co/v1",
+      apiKey,
+    });
 
     const messages = [
       {
@@ -54,7 +55,7 @@ const getAIResponse = async (message, history = []) => {
     ];
 
     const completion = await client.chat.completions.create({
-      model: MODEL_NAME,
+      model: "meta-llama/Llama-3.1-8B-Instruct",
       messages,
       temperature: 0.7,
       max_tokens: 180,
@@ -68,13 +69,14 @@ const getAIResponse = async (message, history = []) => {
 
     return String(text).trim();
   } catch (error) {
-  console.error("HF FULL ERROR:", error);
-  console.error("HF ERROR MESSAGE:", error?.message);
-  console.error("HF ERROR STATUS:", error?.status);
-  console.error("HF ERROR RESPONSE:", error?.response?.data);
+    console.error("HF FULL ERROR:", error);
+    console.error("HF ERROR MESSAGE:", error?.message);
+    console.error("HF ERROR STATUS:", error?.status);
+    console.error("HF ERROR RESPONSE:", error?.response?.data);
 
-  return "AI service is temporarily unavailable.";
-}
+    // ✅ Safe fallback (no crash)
+    return "AI service is temporarily unavailable.";
+  }
 };
 
 module.exports = { getAIResponse };
